@@ -1,0 +1,55 @@
+# wrangler.toml — Cloudflare Worker configuration
+#
+# RULES:
+#  - NEVER put secrets in this file (API keys, service role keys, JWT secrets)
+#  - Use `wrangler secret put <NAME>` for all secrets
+#  - [vars] is safe for non-secret configuration only
+#  - This file IS committed to git — treat it as public
+#
+# Setup checklist:
+#  1. Replace REPLACE_WITH_* placeholders with real values
+#  2. Create KV namespace: `wrangler kv:namespace create RATE_LIMIT_KV`
+#     Then paste the returned id below
+#  3. Set all secrets (see bottom of this file)
+
+name = "life-heatmap-api"
+main = "workers/api.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ─── Public variables (safe to commit) ────────────────────────────────────────
+[vars]
+ENVIRONMENT = "production"
+SUPABASE_URL = "https://dqzmljdcgeizwtzcsoic.supabase.co"
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+FRONTEND_ORIGIN = "https://life-heatmap.pages.dev"
+WORKER_URL = "https://life-heatmap-api.REPLACE_WITH_YOUR_SUBDOMAIN.workers.dev"
+FEATURE_AI_INSIGHTS_ENABLED = "true"
+AI_DAILY_QUOTA_PER_USER = "20"
+
+# ─── KV namespace (rate limiting store) ───────────────────────────────────────
+# Create with: wrangler kv:namespace create RATE_LIMIT_KV
+# Then replace the id below with the output
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# ─── Preview environment ──────────────────────────────────────────────────────
+[env.preview]
+vars = { ENVIRONMENT = "preview", FRONTEND_ORIGIN = "https://life-heatmap-preview.pages.dev" }
+
+[[env.preview.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+
+# ─── Development environment ───────────────────────────────────────────────────
+[env.development]
+vars = { ENVIRONMENT = "development", FRONTEND_ORIGIN = "http://localhost:5000", WORKER_URL = "http://localhost:8787" }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECRETS — set with wrangler CLI, NEVER put values here
+# wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# wrangler secret put JWT_SECRET
+# wrangler secret put REPL_CLIENT_ID
+# wrangler secret put OPENAI_API_KEY
+# ─────────────────────────────────────────────────────────────────────────────

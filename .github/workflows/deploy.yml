@@ -1,0 +1,99 @@
+# .github/workflows/deploy.yml
+#
+# Deploys:
+#   - Cloudflare Worker (backend API) on every push to `main`
+#   - Cloudflare Pages (frontend) on every push to `main`
+#
+# Security design:
+#   - Minimum-privilege token: only Workers:Edit + Pages:Edit
+#   - Secrets are pulled from GitHub Actions secrets — NEVER hardcoded
+#   - Worker secrets are set via `wrangler secret put` (not in wrangler.toml)
+#   - Third-party actions are pinned to exact commit SHA
+#   - No secret values are printed to logs
+#   - Pull requests from forks do NOT have access to secrets (default GitHub behavior)
+
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  # Allow manual re-deploy from GitHub UI
+  workflow_dispatch:
+
+# Least-privilege permissions
+permissions:
+  contents: read
+
+jobs:
+  # ─── Deploy Worker (backend) ────────────────────────────────────────────────
+  deploy-worker:
+    name: Deploy Cloudflare Worker
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set Worker secrets
+        # Secrets are injected from GitHub Actions secrets — values never appear in logs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env production
+          echo "${{ secrets.JWT_SECRET }}"                | npx wrangler secret put JWT_SECRET --env production
+          echo "${{ secrets.REPL_CLIENT_ID }}"           | npx wrangler secret put REPL_CLIENT_ID --env production
+          echo "${{ secrets.OPENAI_API_KEY }}"           | npx wrangler secret put OPENAI_API_KEY --env production
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env production
+
+  # ─── Deploy Pages (frontend) ────────────────────────────────────────────────
+  deploy-pages:
+    name: Deploy Cloudflare Pages
+    runs-on: ubuntu-latest
+    environment: production
+    # Pages deploy does not depend on Worker — run in parallel
+    needs: []
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        # VITE_API_URL is a public var — safe to be in the built JS bundle
+        # It tells the frontend where the Worker lives
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@f0a1cd58cd66095dee69bfa18fa5efd1dde93bca # v1.5.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: life-heatmap
+          directory: dist/public
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
