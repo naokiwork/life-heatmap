@@ -1,38 +1,50 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { categories, activitySessions, type InsertCategory, type InsertActivitySession } from "@shared/schema";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getCategories(userId: string): Promise<typeof categories.$inferSelect[]>;
+  createCategory(category: InsertCategory): Promise<typeof categories.$inferSelect>;
+  deleteCategory(id: number, userId: string): Promise<void>;
+  
+  getActivitySessions(userId: string): Promise<any[]>;
+  createActivitySession(session: InsertActivitySession): Promise<typeof activitySessions.$inferSelect>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getCategories(userId: string) {
+    return await db.select().from(categories).where(eq(categories.userId, userId));
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async createCategory(category: InsertCategory) {
+    const [created] = await db.insert(categories).values(category).returning();
+    return created;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async deleteCategory(id: number, userId: string) {
+    await db.delete(categories).where(and(eq(categories.id, id), eq(categories.userId, userId)));
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getActivitySessions(userId: string) {
+    const sessions = await db.select({
+      session: activitySessions,
+      category: categories,
+    })
+    .from(activitySessions)
+    .leftJoin(categories, eq(activitySessions.categoryId, categories.id))
+    .where(eq(activitySessions.userId, userId))
+    .orderBy(desc(activitySessions.startTime));
+
+    return sessions.map(s => ({
+      ...s.session,
+      category: s.category
+    }));
+  }
+
+  async createActivitySession(session: InsertActivitySession) {
+    const [created] = await db.insert(activitySessions).values(session).returning();
+    return created;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
