@@ -7,6 +7,7 @@ import { setupAuth } from "./replit_integrations/auth/replitAuth";
 import { registerAuthRoutes } from "./replit_integrations/auth/routes";
 import { isAuthenticated } from "./replit_integrations/auth/replitAuth";
 import OpenAI from "openai";
+import { aiLimiter, isAiInsightsEnabled, checkAndIncrementAiQuota } from "./security";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -156,10 +157,25 @@ export async function registerRoutes(
   });
 
   // ─── AI Insights (Premium) ───────────────────────────────────
-  app.get(api.insights.get.path, isAuthenticated, async (req: any, res) => {
+  // Server-only: AI_INTEGRATIONS_OPENAI_API_KEY is NEVER sent to the client.
+  // Protected by: premium gate, IP rate limit (aiLimiter), kill switch, per-user daily quota.
+  app.get(api.insights.get.path, isAuthenticated, aiLimiter, async (req: any, res) => {
     if (!await requirePremium(req, res)) return;
 
-    const sessions = await storage.getActivitySessions(req.user.claims.sub);
+    // Kill switch — set FEATURE_AI_INSIGHTS_ENABLED=false to disable instantly
+    if (!isAiInsightsEnabled()) {
+      return res.status(503).json({ message: "AI Insights are temporarily unavailable." });
+    }
+
+    // Per-user daily quota (default: 20 calls/day, set AI_DAILY_QUOTA_PER_USER to override)
+    const userId: string = req.user.claims.sub;
+    if (!checkAndIncrementAiQuota(userId)) {
+      return res.status(429).json({
+        message: "Daily AI insight limit reached. Come back tomorrow!",
+      });
+    }
+
+    const sessions = await storage.getActivitySessions(userId);
     if (sessions.length < 3) {
       return res.json([{ insight: "Not enough data yet. Log more activities!", type: "neutral" }]);
     }
@@ -180,7 +196,8 @@ export async function registerRoutes(
       const parsed = JSON.parse(response.choices[0].message?.content || '{"insights":[]}');
       res.json(parsed.insights || []);
     } catch (e) {
-      console.error(e);
+      // Log the error server-side but never expose it to the client
+      console.error("[ai-insights] OpenAI call failed:", (e as Error)?.message ?? "unknown");
       res.json([{ insight: "Keep up the good work!", type: "positive" }]);
     }
   });

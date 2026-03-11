@@ -1,0 +1,225 @@
+You are a senior full-stack cloud security engineer and deployment engineer.
+
+Project goal:
+Set up and harden this app for secure deployment using the following architecture:
+
+Development:
+- Replit or Cursor
+
+Source Control:
+- GitHub
+
+Frontend Deployment:
+- Cloudflare Pages
+
+Backend API:
+- Cloudflare Workers
+
+Database:
+- Cloudflare D1 or Supabase
+
+CI/CD:
+- GitHub Actions
+
+Your mission:
+Review, refactor, and prepare this project so it can be safely deployed with GitHub -> Cloudflare Pages/Workers, while minimizing security risks, secret leaks, abuse, and runaway billing.
+
+Important:
+Do not give generic advice only.
+Apply concrete changes.
+Generate actual code/config examples where appropriate.
+Prefer production-safe defaults.
+Assume this app may later become a SaaS product.
+
+==================================================
+1. DEPLOYMENT ARCHITECTURE REQUIREMENTS
+==================================================
+
+Set up the project so that:
+
+- Frontend is deployed to Cloudflare Pages
+- Backend/API logic is deployed to Cloudflare Workers
+- Sensitive operations must run only on the server side
+- Client-side code must never contain private secrets
+- GitHub is used as the source of truth
+- GitHub Actions can be used for CI/CD safely
+- Environment variables must be separated by:
+  - development
+  - preview
+  - production
+
+If the current architecture mixes frontend and backend responsibilities unsafely, refactor it.
+
+==================================================
+2. SECRET MANAGEMENT RULES
+==================================================
+
+Enforce all of the following rules strictly:
+
+- Never place API keys, service-role keys, admin tokens, or private credentials in client-side code
+- Treat all public environment variables (such as NEXT_PUBLIC_ or PUBLIC_) as exposed
+- Move all secret-dependent operations to Cloudflare Workers
+- Store secrets only in:
+  - Cloudflare Worker secrets
+  - Cloudflare Pages environment variables only if public-safe
+  - GitHub Actions secrets
+- Do not hardcode secrets in:
+  - source files
+  - wrangler.toml / wrangler.json / wrangler.jsonc
+  - .env files committed to git
+  - logs
+  - source maps
+  - HTML responses
+  - client error messages
+
+Also:
+
+- Add .env*, .dev.vars*, .dev.vars.* and other secret-like files to .gitignore
+- Scan the codebase for hardcoded credentials and replace them with secure env bindings
+- Add comments in code explaining which variables are server-only and why
+
+==================================================
+3. SUPABASE / DATABASE SECURITY RULES
+==================================================
+
+If the app uses Supabase:
+
+- Use anon key in browser only if necessary
+- Never expose service role key to the browser
+- Keep service role key only inside Cloudflare Workers
+- Enforce Row Level Security (RLS) on all user-owned tables
+- Write example RLS policies so each user can only access their own rows
+- Prevent anonymous write access unless explicitly intended
+
+If the app uses Cloudflare D1:
+
+- Ensure all sensitive queries are protected behind authenticated Worker routes
+- Do not expose raw database access from the frontend
+- Validate ownership and authorization before every read/write
+
+==================================================
+4. ABUSE PREVENTION / BILLING PROTECTION
+==================================================
+
+Design the system so that even if someone tries to abuse the app, billing damage is minimized.
+
+Implement all of the following:
+
+- Rate limiting per IP
+- Rate limiting per user
+- Per-endpoint protection
+- Daily quota for expensive operations
+- Reject anonymous access where not required
+- Validate all request payloads strictly
+- Add abuse protection for paid APIs
+- Add a kill switch / feature flag to disable expensive endpoints quickly
+- Add graceful quota exceeded responses
+- Add monitoring hooks for usage spikes
+- Ensure all paid API calls happen server-side only
+
+If the app calls paid services (AI APIs, image generation APIs, email APIs, SMS APIs, etc.):
+- identify them clearly
+- move them behind authenticated Worker endpoints
+- add cost guardrails
+- add usage counters in database
+- prevent repeated automated abuse
+
+==================================================
+5. GITHUB ACTIONS SECURITY RULES
+==================================================
+
+Harden GitHub Actions with the following:
+
+- least-privilege permissions
+- do not expose secrets to untrusted PRs
+- separate dev / preview / production secrets
+- pin third-party actions by version or commit SHA
+- avoid unsafe workflow patterns
+- do not print secrets in logs
+- make deployment workflows safe for Cloudflare Pages and Workers
+
+If necessary, rewrite the workflow files.
+
+==================================================
+6. LOGGING / ERROR HANDLING RULES
+==================================================
+
+Refactor logging so that the app never logs:
+
+- API keys
+- tokens
+- Authorization headers
+- cookies
+- raw secret values
+- raw sensitive request bodies
+- service role credentials
+
+Error handling must:
+- avoid leaking internal architecture
+- avoid exposing env variable names where unnecessary
+- return safe error responses to the client
+- log only sanitized metadata
+
+==================================================
+7. OUTPUT FORMAT
+==================================================
+
+Return your work in the following structure:
+
+A. Security findings
+- Identify every dangerous pattern in the current app
+- Explain why it is risky
+
+B. Concrete code changes
+- Show exactly what should be changed
+- Prefer patch-style or file-by-file explanations
+
+C. Files to modify
+- List the files that need changes
+- Explain the purpose of each change
+
+D. Secure environment variable design
+- Distinguish:
+  - frontend public vars
+  - worker server-only secrets
+  - GitHub Actions secrets
+  - dev / preview / production separation
+
+E. Rate-limit and abuse-prevention design
+- Explain per-IP, per-user, daily quotas, and kill switch design
+- Include sample implementation ideas
+
+F. Incident response checklist
+- Explain exactly what to do if a secret leak is suspected
+- Include:
+  - rotation steps
+  - revocation steps
+  - redeploy steps
+  - log review
+  - abuse detection
+  - billing containment
+
+G. Final patched code
+- Provide production-oriented code/config examples for the main security fixes
+- Include:
+  - Worker examples
+  - env usage examples
+  - .gitignore additions
+  - GitHub Actions examples if relevant
+
+==================================================
+8. IMPLEMENTATION STYLE
+==================================================
+
+Implementation style requirements:
+
+- be concrete, not vague
+- prefer secure-by-default design
+- prefer minimal-secret architecture
+- prefer server-side enforcement over client-side trust
+- prefer maintainable production code
+- explain tradeoffs briefly when necessary
+- if something is uncertain, state the assumption clearly
+- do not recommend insecure shortcuts
+
+Now review and refactor the app accordingly.
