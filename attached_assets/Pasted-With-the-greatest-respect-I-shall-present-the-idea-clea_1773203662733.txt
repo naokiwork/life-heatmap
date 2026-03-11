@@ -1,0 +1,368 @@
+With the greatest respect, I shall present the idea clearly in English.
+
+⸻
+
+Viral App Idea
+
+Life Heatmap
+
+A mobile and web application that visualizes your life activity like a GitHub contribution graph.
+
+Instead of commits, the heatmap represents:
+	•	studying
+	•	coding
+	•	workouts
+	•	reading
+	•	productivity
+	•	any personal effort
+
+The result is a visual map of your life progress.
+
+People naturally want to share it on social media, which creates strong viral growth.
+
+⸻
+
+1. Core Concept
+
+“Your life becomes a contribution graph.”
+
+Example heatmap:
+
+⬜ ⬜ 🟩 🟩 🟩 ⬜ ⬜
+⬜ 🟩 🟩 🟩 🟩 🟩 ⬜
+⬜ 🟩 🟩 🟩 🟩 ⬜ ⬜
+
+Color intensity represents effort.
+
+Example:
+
+Time spent	Color
+0 min	white
+30 min	light green
+1 hour	medium green
+2 hours	dark green
+3+ hours	very dark green
+
+
+⸻
+
+2. Why This App Can Go Viral
+
+A viral product usually has these elements.
+
+1. Self-expression
+
+People want to show their discipline.
+
+Example post:
+
+“My life heatmap this month”
+
+Coding: 120h
+Workout: 60h
+Study: 80h
+
+This spreads easily on:
+	•	X (Twitter)
+	•	Instagram
+	•	LinkedIn
+	•	Discord
+
+⸻
+
+2. Competition
+
+Users compare with friends.
+
+Example leaderboard:
+
+Productivity Score
+
+1. Alex — 12,400
+2. Ken — 10,200
+3. Naoki — 9,800
+
+This creates social engagement.
+
+⸻
+
+3. Identity building
+
+Profile example:
+
+Name: Naoki
+Focus: AI / Quant / Fitness
+
+Streak: 148 days
+Coding hours: 240
+Workout hours: 120
+Study hours: 310
+
+People share this as personal branding.
+
+⸻
+
+3. Main Features
+
+Life Heatmap
+
+GitHub-style visualization of daily effort.
+
+Users see:
+	•	weekly progress
+	•	monthly heatmap
+	•	yearly heatmap
+
+⸻
+
+Activity Categories
+
+Examples:
+	•	Coding
+	•	Studying
+	•	Workout
+	•	Reading
+	•	Meditation
+	•	Language learning
+	•	Business work
+	•	Music practice
+
+Users can customize categories.
+
+⸻
+
+Session Timer
+
+Start a session:
+
+Start Coding
+Start Workout
+Start Study
+
+When the session ends, time is automatically recorded.
+
+⸻
+
+Streak System
+
+Example:
+
+Current streak: 37 days
+Best streak: 92 days
+
+This creates habit-forming behavior similar to:
+	•	Duolingo
+	•	Snapchat
+
+⸻
+
+Life Score
+
+A calculated productivity score.
+
+Example formula:
+
+Life Score =
+Study × 2
+Coding × 2
+Workout × 1.5
+Reading × 1
+
+
+⸻
+
+AI Insights
+
+The system analyzes behavior.
+
+Example insights:
+
+You study more effectively after workouts.
+Your productivity peaks on Mondays.
+You skip workouts on Fridays.
+
+
+⸻
+
+4. Viral Feature (Most Important)
+
+Shareable Life Card
+
+Users can export a beautiful card for social media.
+
+Example:
+
+Naoki's Life Stats
+
+Coding: 140 hours
+Workout: 80 hours
+Study: 210 hours
+
+Current streak: 120 days
+
+These cards are designed for easy sharing on:
+	•	Instagram
+	•	X
+	•	LinkedIn
+
+This is the main viral mechanism.
+
+⸻
+
+5. UI Design
+
+The interface should feel clean and minimal like Apple apps.
+
+Main screen:
+	•	Heatmap
+	•	Today’s activity
+	•	Weekly statistics
+
+Timer screen:
+
+A circular timer similar to Apple Clock.
+
+Example:
+
+◯
+25:00
+Focus session
+
+
+⸻
+
+6. Technology Stack
+
+This fits very well with the technologies you are already using.
+
+Frontend
+	•	Next.js
+	•	React
+	•	Tailwind
+	•	Recharts (for charts)
+
+Backend
+	•	Cloudflare Workers
+	•	SQLite / D1
+
+⸻
+
+7. Data Model
+
+Example structure:
+
+User
+ └── Sessions
+       └── Activities
+
+Entities:
+
+User
+Session
+Activity
+Streak
+Stats
+
+⸻
+
+8. MVP (Minimum Version)
+
+You could build a basic version in about 1–2 weeks.
+
+Minimum features:
+	•	Heatmap visualization
+	•	Timer
+	•	Activity logging
+	•	Share image
+
+⸻
+
+9. Monetization Strategy
+
+Now to your important question.
+
+Which is better: subscription or one-time purchase?
+
+For this app, subscription is clearly better.
+
+⸻
+
+Why Subscription Is Better
+
+This is a habit-tracking product.
+
+Users use it every day.
+
+Examples of similar apps:
+	•	Strava → subscription
+	•	Notion → subscription
+	•	Duolingo → subscription
+	•	GitHub → subscription
+
+These products rely on ongoing value.
+
+⸻
+
+Recommended Pricing Model
+
+Freemium model.
+
+Free plan:
+	•	Heatmap
+	•	Basic tracking
+	•	Streaks
+
+Pro plan (subscription):
+	•	AI insights
+	•	Advanced analytics
+	•	Unlimited categories
+	•	Social leaderboard
+	•	Custom themes
+
+Price example:
+
+$3 / month
+or
+$20 / year
+
+
+⸻
+
+When One-Time Purchase Works
+
+One-time purchase works for apps that are:
+	•	tools
+	•	utilities
+	•	calculators
+	•	offline apps
+
+Example:
+	•	calculator
+	•	camera app
+	•	editing tool
+
+But habit and productivity apps perform better with subscriptions.
+
+⸻
+
+My Recommendation
+
+Use this model:
+
+Free tier
++
+Premium subscription
+
+Free → basic features
+Pro → analytics + AI + advanced sharing
+
+This maximizes:
+	•	viral growth
+	•	long-term revenue
+	•	user retention
+
+⸻
+
+If you wish, I can also show you a second app idea that has even stronger viral potential.
+
+It is an app type that has created multiple billion-dollar startups, and it would align extremely well with your interests in productivity, fitness, and coding.
