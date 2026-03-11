@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useCategories, useCreateCategory, useDeleteCategory } from "@/hooks/use-categories";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Tag } from "lucide-react";
+import { Plus, Trash2, Tag, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const PRESET_COLORS = [
@@ -9,17 +10,26 @@ const PRESET_COLORS = [
   "#D946EF", "#EC4899", "#F43F5E", "#F97316", "#EAB308"
 ];
 
+async function fetchTierStatus() {
+  const response = await fetch("/api/tier", { credentials: "include" });
+  if (!response.ok) throw new Error("Failed to fetch tier");
+  return response.json();
+}
+
 export default function Categories() {
   const { data: categories = [], isLoading } = useCategories();
+  const { data: tierData } = useQuery({ queryKey: ["/api/tier"], queryFn: fetchTierStatus });
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
   
   const [name, setName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
+  const canAddMore = tierData?.tier === 'premium' || (tierData?.categoryCount || 0) < 5;
+  const atLimit = !canAddMore;
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || atLimit) return;
     createCategory.mutate({ name, color: selectedColor }, {
       onSuccess: () => setName("")
     });
@@ -70,11 +80,22 @@ export default function Categories() {
 
             <button
               type="submit"
-              disabled={createCategory.isPending || !name.trim()}
+              disabled={createCategory.isPending || !name.trim() || atLimit}
               className="w-full flex justify-center items-center gap-2 py-4 rounded-xl font-semibold bg-white text-black hover:bg-white/90 disabled:opacity-50 transition-all active:scale-[0.98]"
             >
               {createCategory.isPending ? "Adding..." : <><Plus className="w-5 h-5" /> Add Category</>}
             </button>
+            
+            {atLimit && (
+              <div className="p-4 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-start gap-3">
+                <Crown className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-200 mb-2">Limit reached</p>
+                  <p className="text-xs text-amber-100/70 mb-3">Free plan: 5 categories max</p>
+                  <a href="#" className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline">Upgrade to Pro →</a>
+                </div>
+              </div>
+            )}
           </form>
         </motion.div>
 

@@ -1,12 +1,20 @@
+import { useQuery } from "@tanstack/react-query";
 import { useActivitySessions } from "@/hooks/use-activities";
 import { useInsights } from "@/hooks/use-insights";
 import { Heatmap } from "@/components/heatmap";
 import { motion } from "framer-motion";
-import { Zap, Clock, Award, Sparkles } from "lucide-react";
+import { Zap, Clock, Award, Sparkles, Crown } from "lucide-react";
+
+async function fetchTierStatus() {
+  const response = await fetch("/api/tier", { credentials: "include" });
+  if (!response.ok) throw new Error("Failed to fetch tier");
+  return response.json();
+}
 
 export default function Dashboard() {
   const { data: sessions = [], isLoading } = useActivitySessions();
-  const { data: insights = [] } = useInsights();
+  const { data: insights = [], isError: insightsError } = useInsights();
+  const { data: tierData } = useQuery({ queryKey: ["/api/tier"], queryFn: fetchTierStatus });
 
   // Calculate stats
   const totalMinutes = sessions.reduce((acc: number, curr: any) => acc + curr.durationMinutes, 0);
@@ -77,7 +85,16 @@ export default function Dashboard() {
           <h3 className="text-xl font-semibold text-white">AI Insights</h3>
         </div>
         
-        {insights.length > 0 ? (
+        {tierData?.tier === 'free' && insightsError ? (
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-400/30 flex items-start gap-4">
+            <Crown className="w-6 h-6 text-purple-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-purple-200 mb-2">Premium Feature</p>
+              <p className="text-sm text-purple-100/70 mb-4">Get AI-powered insights about your productivity patterns with Premium.</p>
+              <a href="#" className="text-sm font-semibold text-purple-300 hover:text-purple-200 underline">Upgrade to Pro →</a>
+            </div>
+          </div>
+        ) : insights.length > 0 ? (
           <div className="space-y-4">
             {insights.map((insight: any, i: number) => (
               <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/5 flex gap-4">

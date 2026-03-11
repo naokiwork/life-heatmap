@@ -20,6 +20,13 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // Endpoint to check user's tier status
+  app.get("/api/tier", isAuthenticated, async (req: any, res) => {
+    const tier = await storage.getUserTier(req.user.claims.sub);
+    const categoryCount = await storage.getCategoryCount(req.user.claims.sub);
+    res.json({ tier, categoryCount, categoryLimit: tier === 'premium' ? null : 5 });
+  });
+
   app.get(api.categories.list.path, isAuthenticated, async (req: any, res) => {
     const categories = await storage.getCategories(req.user.claims.sub);
     res.json(categories);
@@ -28,6 +35,17 @@ export async function registerRoutes(
   app.post(api.categories.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const input = api.categories.create.input.parse(req.body);
+      
+      // Check tier limit
+      const canCreate = await storage.canCreateCategory(req.user.claims.sub);
+      if (!canCreate) {
+        return res.status(402).json({
+          message: "Category limit reached. Upgrade to Premium for unlimited categories.",
+          upgrade_required: true,
+          tier: "premium"
+        });
+      }
+      
       const category = await storage.createCategory({ ...input, userId: req.user.claims.sub });
       res.status(201).json(category);
     } catch (err) {
@@ -74,6 +92,17 @@ export async function registerRoutes(
   });
 
   app.get(api.insights.get.path, isAuthenticated, async (req: any, res) => {
+    const tier = await storage.getUserTier(req.user.claims.sub);
+    
+    // AI Insights is a premium-only feature
+    if (tier !== 'premium') {
+      return res.status(402).json({
+        message: "AI Insights are available in Premium. Upgrade to unlock deeper productivity analysis.",
+        upgrade_required: true,
+        tier: "premium"
+      });
+    }
+
     const sessions = await storage.getActivitySessions(req.user.claims.sub);
     if (sessions.length < 3) {
       return res.json([

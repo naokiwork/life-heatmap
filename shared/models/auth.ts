@@ -21,9 +21,16 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  // Subscription tier fields
+  tier: varchar("tier").default("free").notNull(), // 'free' | 'premium'
+  subscriptionStatus: varchar("subscription_status").default("inactive").notNull(), // 'active' | 'inactive' | 'canceled'
+  subscriptionStartDate: timestamp("subscription_start_date"),
+  subscriptionEndDate: timestamp("subscription_end_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type UserTier = 'free' | 'premium';
+export type SubscriptionStatus = 'active' | 'inactive' | 'canceled';
