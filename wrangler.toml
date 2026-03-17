@@ -12,7 +12,7 @@
 #     Then paste the returned id below
 #  3. Set all secrets (see bottom of this file)
 
-name = "life-heatmap-api"
+name = "life-heatmap"
 main = "workers/api.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
@@ -23,7 +23,8 @@ ENVIRONMENT = "production"
 SUPABASE_URL = "https://dqzmljdcgeizwtzcsoic.supabase.co"
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 FRONTEND_ORIGIN = "https://life-heatmap.pages.dev"
-WORKER_URL = "https://life-heatmap-api.REPLACE_WITH_YOUR_SUBDOMAIN.workers.dev"
+WORKER_URL = "https://life-heatmap.REPLACE_WITH_YOUR_SUBDOMAIN.workers.dev"
+# Set to "false" to instantly disable AI (kill switch). Requires OPENAI_API_KEY secret.
 FEATURE_AI_INSIGHTS_ENABLED = "true"
 AI_DAILY_QUOTA_PER_USER = "20"
 
