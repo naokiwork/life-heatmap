@@ -23,10 +23,13 @@ ENVIRONMENT = "production"
 SUPABASE_URL = "https://dqzmljdcgeizwtzcsoic.supabase.co"
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 FRONTEND_ORIGIN = "https://life-heatmap.pages.dev"
-WORKER_URL = "https://life-heatmap.REPLACE_WITH_YOUR_SUBDOMAIN.workers.dev"
+WORKER_URL = "https://life-heatmap.naokiwork.workers.dev"
 # Set to "false" to instantly disable AI (kill switch). Requires OPENAI_API_KEY secret.
 FEATURE_AI_INSIGHTS_ENABLED = "true"
 AI_DAILY_QUOTA_PER_USER = "20"
+# Stripe price ID for the $3/month plan — NOT secret, safe to commit
+# Replace with the actual price_XXXX ID from your Stripe dashboard
+STRIPE_PRICE_ID = "REPLACE_WITH_STRIPE_PRICE_ID"
 
 # ─── KV namespace (rate limiting store) ───────────────────────────────────────
 # Create with: wrangler kv:namespace create RATE_LIMIT_KV
@@ -53,4 +56,6 @@ vars = { ENVIRONMENT = "development", FRONTEND_ORIGIN = "http://localhost:5000",
 # wrangler secret put JWT_SECRET
 # wrangler secret put REPL_CLIENT_ID
 # wrangler secret put OPENAI_API_KEY
+# wrangler secret put STRIPE_SECRET_KEY      <- from Stripe dashboard (sk_live_... or sk_test_...)
+# wrangler secret put STRIPE_WEBHOOK_SECRET  <- from Stripe webhook settings (whsec_...)
 # ─────────────────────────────────────────────────────────────────────────────

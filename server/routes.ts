@@ -7,7 +7,13 @@ import { setupAuth } from "./replit_integrations/auth/replitAuth";
 import { registerAuthRoutes } from "./replit_integrations/auth/routes";
 import { isAuthenticated } from "./replit_integrations/auth/replitAuth";
 import OpenAI from "openai";
+import Stripe from "stripe";
 import { aiLimiter, isAiInsightsEnabled, checkAndIncrementAiQuota } from "./security";
+
+// STRIPE_SECRET_KEY is server-only — never expose to client
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -201,6 +207,156 @@ export async function registerRoutes(
       res.json([{ insight: "Keep up the good work!", type: "positive" }]);
     }
   });
+
+  // ─── Stripe Billing Routes ────────────────────────────────────────────────────
+  // STRIPE_SECRET_KEY is server-only — all these routes run server-side only.
+
+  /** POST /api/billing/checkout — Create a Stripe Checkout Session */
+  app.post("/api/billing/checkout", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ message: "Stripe not configured (STRIPE_SECRET_KEY missing)" });
+    }
+    const userId: string = req.user.claims.sub;
+    const userRecord = await storage.getUser(userId);
+
+    let customerId: string | undefined = userRecord?.stripeCustomerId ?? undefined;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: userRecord?.email ?? undefined,
+        metadata: { userId },
+      });
+      customerId = customer.id;
+      await storage.updateStripeCustomer(userId, customerId);
+    }
+
+    const priceId = process.env.STRIPE_PRICE_ID;
+    if (!priceId) {
+      return res.status(503).json({ message: "Stripe price not configured (STRIPE_PRICE_ID missing)" });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      payment_method_types: ["card"],
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${req.protocol}://${req.get("host")}/?upgraded=true`,
+      cancel_url: `${req.protocol}://${req.get("host")}/`,
+      subscription_data: { metadata: { userId } },
+      metadata: { userId },
+    });
+
+    res.json({ url: session.url });
+  });
+
+  /** POST /api/billing/portal — Open Stripe Customer Portal */
+  app.post("/api/billing/portal", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ message: "Stripe not configured (STRIPE_SECRET_KEY missing)" });
+    }
+    const userId: string = req.user.claims.sub;
+    const userRecord = await storage.getUser(userId);
+
+    if (!userRecord?.stripeCustomerId) {
+      return res.status(404).json({ message: "No billing account found. Please subscribe first." });
+    }
+
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: userRecord.stripeCustomerId,
+      return_url: `${req.protocol}://${req.get("host")}/`,
+    });
+
+    res.json({ url: portalSession.url });
+  });
+
+  /**
+   * POST /api/billing/webhook — Stripe webhook handler
+   * Uses raw body for signature verification — MUST be registered before any
+   * body-parsing middleware touches this path (bodyParser.raw is used).
+   */
+  app.post(
+    "/api/billing/webhook",
+    (req: any, res: any, next: any) => {
+      // Parse raw body for Stripe signature verification
+      let rawBody = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk: string) => { rawBody += chunk; });
+      req.on("end", () => { req.rawBody = rawBody; next(); });
+    },
+    async (req: any, res: any) => {
+      if (!stripe) {
+        return res.status(503).json({ message: "Stripe not configured" });
+      }
+      const signature = req.headers["stripe-signature"];
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!signature || !webhookSecret) {
+        return res.status(400).json({ error: "Missing stripe-signature or webhook secret" });
+      }
+
+      let event: Stripe.Event;
+      try {
+        event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+      } catch (e) {
+        console.error("[webhook] Stripe signature verification failed:", (e as Error).message);
+        return res.status(400).json({ error: "Invalid signature" });
+      }
+
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = session.metadata?.userId;
+          if (userId && session.subscription) {
+            await storage.updateSubscription(userId, {
+              tier: "premium",
+              subscriptionStatus: "active",
+              subscriptionStartDate: new Date(),
+              stripeCustomerId: session.customer as string,
+              stripeSubscriptionId: session.subscription as string,
+            });
+          }
+          break;
+        }
+        case "customer.subscription.updated": {
+          const sub = event.data.object as Stripe.Subscription;
+          const userId = sub.metadata?.userId;
+          const isActive = sub.status === "active" || sub.status === "trialing";
+          if (userId) {
+            await storage.updateSubscription(userId, {
+              tier: isActive ? "premium" : "free",
+              subscriptionStatus: isActive ? "active" : sub.status,
+              stripeSubscriptionId: sub.id,
+            });
+          }
+          break;
+        }
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as Stripe.Subscription;
+          const userId = sub.metadata?.userId;
+          if (userId) {
+            await storage.updateSubscription(userId, {
+              tier: "free",
+              subscriptionStatus: "canceled",
+              subscriptionEndDate: new Date(),
+              stripeSubscriptionId: null,
+            });
+          }
+          break;
+        }
+        case "invoice.payment_failed": {
+          const invoice = event.data.object as Stripe.Invoice;
+          const customerId = invoice.customer as string;
+          if (customerId) {
+            await storage.updateSubscriptionByCustomer(customerId, { subscriptionStatus: "inactive" });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      res.json({ received: true });
+    }
+  );
 
   return httpServer;
 }

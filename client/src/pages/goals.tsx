@@ -3,8 +3,10 @@ import { useGoals, useCreateGoal, useDeleteGoal } from "@/hooks/use-goals";
 import { useCategories } from "@/hooks/use-categories";
 import { motion } from "framer-motion";
 import { Crown, Target, Trash2, Plus, CheckCircle2 } from "lucide-react";
+import { useBilling } from "@/hooks/use-billing";
 
 function PremiumWall() {
+  const { startCheckout, isLoading } = useBilling();
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center gap-6">
       <div className="p-5 rounded-full bg-amber-400/10 border border-amber-400/20">
@@ -14,9 +16,14 @@ function PremiumWall() {
         <h3 className="text-2xl font-bold text-white mb-2">Goal Tracking is Premium</h3>
         <p className="text-muted-foreground max-w-sm">Set ambitious targets and watch your progress unfold. Available with Premium.</p>
       </div>
-      <a href="#" className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors">
-        Upgrade to Pro — $3/mo
-      </a>
+      <button
+        data-testid="button-upgrade-goals"
+        onClick={startCheckout}
+        disabled={isLoading}
+        className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {isLoading ? "Redirecting…" : "Upgrade to Pro — $3/mo"}
+      </button>
     </div>
   );
 }

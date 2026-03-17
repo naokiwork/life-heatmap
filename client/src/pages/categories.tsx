@@ -4,6 +4,7 @@ import { useCategories, useCreateCategory, useDeleteCategory } from "@/hooks/use
 import { motion } from "framer-motion";
 import { Plus, Trash2, Tag, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useBilling } from "@/hooks/use-billing";
 
 const PRESET_COLORS = [
   "#10B981", "#3B82F6", "#8B5CF6", "#6366F1", 
@@ -21,7 +22,8 @@ export default function Categories() {
   const { data: tierData } = useQuery({ queryKey: ["/api/tier"], queryFn: fetchTierStatus });
   const createCategory = useCreateCategory();
   const deleteCategory = useDeleteCategory();
-  
+  const { startCheckout, isLoading: billingLoading } = useBilling();
+
   const [name, setName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const canAddMore = tierData?.tier === 'premium' || (tierData?.categoryCount || 0) < 5;
@@ -92,7 +94,14 @@ export default function Categories() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-amber-200 mb-2">Limit reached</p>
                   <p className="text-xs text-amber-100/70 mb-3">Free plan: 5 categories max</p>
-                  <a href="#" className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline">Upgrade to Pro →</a>
+                  <button
+                    data-testid="button-upgrade-categories"
+                    onClick={startCheckout}
+                    disabled={billingLoading}
+                    className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline disabled:opacity-50"
+                  >
+                    {billingLoading ? "Redirecting…" : "Upgrade to Pro →"}
+                  </button>
                 </div>
               </div>
             )}

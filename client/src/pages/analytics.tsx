@@ -6,10 +6,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from "recharts";
+import { useBilling } from "@/hooks/use-billing";
 
 const CHART_COLORS = ["#10B981", "#3B82F6", "#8B5CF6", "#F97316", "#EC4899", "#EAB308", "#F43F5E", "#6366F1"];
 
 function PremiumWall({ feature }: { feature: string }) {
+  const { startCheckout, isLoading } = useBilling();
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center gap-6">
       <div className="p-5 rounded-full bg-amber-400/10 border border-amber-400/20">
@@ -19,9 +21,14 @@ function PremiumWall({ feature }: { feature: string }) {
         <h3 className="text-2xl font-bold text-white mb-2">{feature} is Premium</h3>
         <p className="text-muted-foreground max-w-sm">Upgrade to Premium to unlock detailed analytics and understand your productivity patterns.</p>
       </div>
-      <a href="#" className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors">
-        Upgrade to Pro — $3/mo
-      </a>
+      <button
+        data-testid="button-upgrade-premium"
+        onClick={startCheckout}
+        disabled={isLoading}
+        className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {isLoading ? "Redirecting…" : "Upgrade to Pro — $3/mo"}
+      </button>
     </div>
   );
 }

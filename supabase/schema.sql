@@ -24,9 +24,23 @@ create table if not exists users (
   subscription_status    varchar not null default 'inactive',
   subscription_start_date timestamptz,
   subscription_end_date  timestamptz,
+  -- Stripe billing fields — server-only, never expose in API responses
+  stripe_customer_id     varchar unique,
+  stripe_subscription_id varchar unique,
   created_at             timestamptz default now(),
   updated_at             timestamptz default now()
 );
+
+-- Add Stripe columns if upgrading from an existing schema (idempotent)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='stripe_customer_id') then
+    alter table users add column stripe_customer_id varchar unique;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='stripe_subscription_id') then
+    alter table users add column stripe_subscription_id varchar unique;
+  end if;
+end $$;
 
 -- ─── Sessions (only needed for Express dev; not used in Worker) ───────────────
 create table if not exists sessions (

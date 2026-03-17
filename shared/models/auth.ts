@@ -26,6 +26,9 @@ export const users = pgTable("users", {
   subscriptionStatus: varchar("subscription_status").default("inactive").notNull(), // 'active' | 'inactive' | 'canceled'
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
+  // Stripe billing fields (server-only — never expose to client)
+  stripeCustomerId: varchar("stripe_customer_id"),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

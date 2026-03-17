@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useActivitySessions } from "@/hooks/use-activities";
 import { useInsights } from "@/hooks/use-insights";
 import { Heatmap } from "@/components/heatmap";
-import { motion } from "framer-motion";
-import { Zap, Clock, Award, Sparkles, Crown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Zap, Clock, Award, Sparkles, Crown, CheckCircle2, X } from "lucide-react";
+import { useBilling } from "@/hooks/use-billing";
+import { useState, useEffect } from "react";
 
 async function fetchTierStatus() {
   const response = await fetch("/api/tier", { credentials: "include" });
@@ -15,6 +17,20 @@ export default function Dashboard() {
   const { data: sessions = [], isLoading } = useActivitySessions();
   const { data: insights = [], isError: insightsError } = useInsights();
   const { data: tierData } = useQuery({ queryKey: ["/api/tier"], queryFn: fetchTierStatus });
+  const { startCheckout, isLoading: billingLoading } = useBilling();
+
+  // Show upgrade success banner when returning from Stripe checkout
+  const [showUpgradedBanner, setShowUpgradedBanner] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hasFlag = new URLSearchParams(window.location.search).get("upgraded") === "true";
+      if (hasFlag) {
+        // Remove the query param without a page reload
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+      return hasFlag;
+    }
+    return false;
+  });
 
   // Calculate stats
   const totalMinutes = sessions.reduce((acc: number, curr: any) => acc + curr.durationMinutes, 0);
@@ -36,6 +52,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* Upgrade success banner */}
+      <AnimatePresence>
+        {showUpgradedBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="flex items-center gap-4 p-4 rounded-2xl bg-primary/10 border border-primary/30"
+            data-testid="banner-upgrade-success"
+          >
+            <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+            <p className="flex-1 text-sm font-medium text-white">Welcome to Premium! All features are now unlocked.</p>
+            <button
+              onClick={() => setShowUpgradedBanner(false)}
+              className="text-muted-foreground hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <header>
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2">Overview</h2>
         <p className="text-muted-foreground text-lg">Your activity at a glance.</p>
@@ -91,7 +129,14 @@ export default function Dashboard() {
             <div className="flex-1">
               <p className="text-sm font-semibold text-purple-200 mb-2">Premium Feature</p>
               <p className="text-sm text-purple-100/70 mb-4">Get AI-powered insights about your productivity patterns with Premium.</p>
-              <a href="#" className="text-sm font-semibold text-purple-300 hover:text-purple-200 underline">Upgrade to Pro →</a>
+              <button
+                data-testid="button-upgrade-ai-insights"
+                onClick={startCheckout}
+                disabled={billingLoading}
+                className="text-sm font-semibold text-purple-300 hover:text-purple-200 underline disabled:opacity-50"
+              >
+                {billingLoading ? "Redirecting…" : "Upgrade to Pro →"}
+              </button>
             </div>
           </div>
         ) : insights.length > 0 ? (

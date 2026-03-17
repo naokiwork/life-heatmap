@@ -2,8 +2,10 @@ import { useLeaderboard } from "@/hooks/use-analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
 import { Crown, Trophy, Medal } from "lucide-react";
+import { useBilling } from "@/hooks/use-billing";
 
 function PremiumWall() {
+  const { startCheckout, isLoading } = useBilling();
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center gap-6">
       <div className="p-5 rounded-full bg-amber-400/10 border border-amber-400/20">
@@ -13,9 +15,14 @@ function PremiumWall() {
         <h3 className="text-2xl font-bold text-white mb-2">Leaderboard is Premium</h3>
         <p className="text-muted-foreground max-w-sm">Compare your productivity with others and climb the ranks. Available with Premium.</p>
       </div>
-      <a href="#" className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors">
-        Upgrade to Pro — $3/mo
-      </a>
+      <button
+        data-testid="button-upgrade-leaderboard"
+        onClick={startCheckout}
+        disabled={isLoading}
+        className="px-6 py-3 rounded-xl bg-amber-400 text-black font-semibold hover:bg-amber-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {isLoading ? "Redirecting…" : "Upgrade to Pro — $3/mo"}
+      </button>
     </div>
   );
 }

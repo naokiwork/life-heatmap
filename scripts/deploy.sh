@@ -5,8 +5,8 @@
 # Run this in the Replit Shell:
 #   chmod +x scripts/deploy.sh && bash scripts/deploy.sh
 #
-# You will be prompted for the 4 secrets below.
-# Nothing is written to any file.
+# You will be prompted for secrets below.
+# Nothing is written to any file — all values are memory-only.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e  # Exit on any error
@@ -43,20 +43,45 @@ echo ""
 ok "Supabase service role key received"
 
 echo ""
-echo "Cloudflare API token"
-echo "  → Cloudflare dashboard → My Profile → API Tokens → Create Token"
-echo "  → Use template: 'Edit Cloudflare Workers' (also add KV:Edit and Pages:Edit)"
-read -rsp "  Paste here: " CLOUDFLARE_API_TOKEN
+echo "Cloudflare Global API Key"
+echo "  → Cloudflare dashboard → My Profile → API Tokens → 'Global API Key' → View"
+read -rsp "  Paste here: " CLOUDFLARE_API_KEY
 echo ""
-[[ -z "$CLOUDFLARE_API_TOKEN" ]] && fail "Cloudflare API token is required"
-ok "Cloudflare API token received"
+[[ -z "$CLOUDFLARE_API_KEY" ]] && fail "Cloudflare Global API Key is required"
+ok "Cloudflare Global API Key received"
+
+# Pre-filled — confirmed from Cloudflare API
+CLOUDFLARE_ACCOUNT_ID="356d13d3d8d0c5ac8449fa2cc8ede448"
+CLOUDFLARE_EMAIL="Naokiondawork@gmail.com"
+ok "Cloudflare Account ID: ${CLOUDFLARE_ACCOUNT_ID:0:8}... (pre-filled)"
 
 echo ""
-echo "Cloudflare Account ID (32-char hex)"
-echo "  → Cloudflare dashboard → Workers & Pages → right sidebar → 'Account ID'"
-read -rp "  Paste here: " CLOUDFLARE_ACCOUNT_ID
-[[ -z "$CLOUDFLARE_ACCOUNT_ID" ]] && fail "Cloudflare Account ID is required"
-ok "Cloudflare Account ID: ${CLOUDFLARE_ACCOUNT_ID:0:8}..."
+echo "Stripe Secret Key (from Stripe dashboard → Developers → API keys)"
+echo "  → Use test key (sk_test_...) for testing, live key (sk_live_...) for production"
+read -rsp "  Paste here: " STRIPE_SECRET_KEY
+echo ""
+[[ -z "$STRIPE_SECRET_KEY" ]] && fail "Stripe Secret Key is required"
+ok "Stripe Secret Key received"
+
+echo ""
+echo "Stripe Webhook Secret"
+echo "  → Stripe dashboard → Developers → Webhooks → Add endpoint"
+echo "  → Endpoint URL: https://life-heatmap.naokiwork.workers.dev/api/billing/webhook"
+echo "  → Events: checkout.session.completed, customer.subscription.updated,"
+echo "             customer.subscription.deleted, invoice.payment_failed"
+echo "  → After creating, copy the 'Signing secret' (whsec_...)"
+read -rsp "  Paste here: " STRIPE_WEBHOOK_SECRET
+echo ""
+[[ -z "$STRIPE_WEBHOOK_SECRET" ]] && fail "Stripe Webhook Secret is required"
+ok "Stripe Webhook Secret received"
+
+echo ""
+echo "Stripe Price ID (monthly \$3/month plan)"
+echo "  → Stripe dashboard → Products → Create product → Add price → Copy 'Price ID'"
+echo "  → Format: price_XXXXXXXXXXXXXXXXXXXX"
+read -rp "  Paste here: " STRIPE_PRICE_ID
+[[ -z "$STRIPE_PRICE_ID" ]] && fail "Stripe Price ID is required"
+ok "Stripe Price ID: $STRIPE_PRICE_ID"
 
 echo ""
 echo "OpenAI API key (real key from platform.openai.com)"
@@ -125,7 +150,8 @@ fi
 
 header "STEP 4 — Create Cloudflare KV namespace"
 
-export CLOUDFLARE_API_TOKEN
+export CLOUDFLARE_API_KEY
+export CLOUDFLARE_EMAIL
 export CLOUDFLARE_ACCOUNT_ID
 
 KV_OUTPUT=$(npx wrangler kv:namespace create RATE_LIMIT_KV 2>&1)
@@ -155,6 +181,12 @@ ok "JWT_SECRET set"
 echo "$REPL_CLIENT_ID" | npx wrangler secret put REPL_CLIENT_ID
 ok "REPL_CLIENT_ID set"
 
+echo "$STRIPE_SECRET_KEY" | npx wrangler secret put STRIPE_SECRET_KEY
+ok "STRIPE_SECRET_KEY set"
+
+echo "$STRIPE_WEBHOOK_SECRET" | npx wrangler secret put STRIPE_WEBHOOK_SECRET
+ok "STRIPE_WEBHOOK_SECRET set"
+
 if [[ -n "$OPENAI_API_KEY" ]]; then
   echo "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY
   ok "OPENAI_API_KEY set"
@@ -167,10 +199,15 @@ header "STEP 6 — Deploy Worker to Cloudflare"
 # Update kill switch based on whether OpenAI key was provided
 sed -i "s/FEATURE_AI_INSIGHTS_ENABLED = \"true\"/FEATURE_AI_INSIGHTS_ENABLED = \"${AI_ENABLED}\"/" wrangler.toml
 
-# Determine the workers.dev subdomain from the account
+# Patch Stripe Price ID into wrangler.toml (it's a public var, not a secret)
+sed -i "s/STRIPE_PRICE_ID = \"REPLACE_WITH_STRIPE_PRICE_ID\"/STRIPE_PRICE_ID = \"${STRIPE_PRICE_ID}\"/" wrangler.toml
+ok "STRIPE_PRICE_ID updated in wrangler.toml: $STRIPE_PRICE_ID"
+
+# Determine the workers.dev subdomain from the account (using Global API Key)
 WORKER_SUBDOMAIN=$(curl -s \
   "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
-  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  --header "X-Auth-Key: ${CLOUDFLARE_API_KEY}" \
+  --header "X-Auth-Email: ${CLOUDFLARE_EMAIL}" \
   --header "Content-Type: application/json" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -n "$WORKER_SUBDOMAIN" ]]; then
@@ -237,11 +274,14 @@ set_gh_secret() {
   ok "GitHub secret ${secret_name} set"
 }
 
-set_gh_secret "CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_API_TOKEN"
+set_gh_secret "CLOUDFLARE_API_KEY" "$CLOUDFLARE_API_KEY"
+set_gh_secret "CLOUDFLARE_EMAIL" "$CLOUDFLARE_EMAIL"
 set_gh_secret "CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_ACCOUNT_ID"
 set_gh_secret "SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_SERVICE_ROLE_KEY"
 set_gh_secret "JWT_SECRET" "$JWT_SECRET"
 set_gh_secret "REPL_CLIENT_ID" "$REPL_CLIENT_ID"
+set_gh_secret "STRIPE_SECRET_KEY" "$STRIPE_SECRET_KEY"
+set_gh_secret "STRIPE_WEBHOOK_SECRET" "$STRIPE_WEBHOOK_SECRET"
 [[ -n "$OPENAI_API_KEY" ]] && set_gh_secret "OPENAI_API_KEY" "$OPENAI_API_KEY"
 
 # Set the VITE_API_URL as a GitHub Actions variable
@@ -260,9 +300,14 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  Deployment complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Frontend:   https://life-heatmap.pages.dev"
-echo "  Worker API: ${WORKER_URL:-https://life-heatmap.YOUR_SUBDOMAIN.workers.dev}"
-echo "  GitHub:     https://github.com/naokiwork/life-heatmap"
+echo "  Frontend:     https://life-heatmap.pages.dev"
+echo "  Worker API:   ${WORKER_URL:-https://life-heatmap.naokiwork.workers.dev}"
+echo "  GitHub:       https://github.com/naokiwork/life-heatmap"
+echo ""
+echo -e "${YELLOW}  Stripe webhook endpoint (add this in Stripe dashboard):${NC}"
+echo "  ${WORKER_URL:-https://life-heatmap.naokiwork.workers.dev}/api/billing/webhook"
+echo "  Events: checkout.session.completed, customer.subscription.updated,"
+echo "           customer.subscription.deleted, invoice.payment_failed"
 echo ""
 if [[ "$AI_ENABLED" == "false" ]]; then
   warn "AI Insights disabled. To enable later:"

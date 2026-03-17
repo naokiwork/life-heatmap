@@ -5,10 +5,9 @@
 #   - Cloudflare Pages (frontend) on every push to `main`
 #
 # Security design:
-#   - Minimum-privilege token: only Workers:Edit + Pages:Edit
+#   - Uses Cloudflare Global API Key (CLOUDFLARE_API_KEY + CLOUDFLARE_EMAIL)
 #   - Secrets are pulled from GitHub Actions secrets — NEVER hardcoded
 #   - Worker secrets are set via `wrangler secret put` (not in wrangler.toml)
-#   - Third-party actions are pinned to exact commit SHA
 #   - No secret values are printed to logs
 #   - Pull requests from forks do NOT have access to secrets (default GitHub behavior)
 
@@ -47,19 +46,25 @@ jobs:
       - name: Set Worker secrets
         # Secrets are injected from GitHub Actions secrets — values never appear in logs
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env production
-          echo "${{ secrets.JWT_SECRET }}"                | npx wrangler secret put JWT_SECRET --env production
-          echo "${{ secrets.REPL_CLIENT_ID }}"           | npx wrangler secret put REPL_CLIENT_ID --env production
-          echo "${{ secrets.OPENAI_API_KEY }}"           | npx wrangler secret put OPENAI_API_KEY --env production
+          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+          echo "${{ secrets.JWT_SECRET }}"                | npx wrangler secret put JWT_SECRET
+          echo "${{ secrets.REPL_CLIENT_ID }}"           | npx wrangler secret put REPL_CLIENT_ID
+          echo "${{ secrets.STRIPE_SECRET_KEY }}"        | npx wrangler secret put STRIPE_SECRET_KEY
+          echo "${{ secrets.STRIPE_WEBHOOK_SECRET }}"    | npx wrangler secret put STRIPE_WEBHOOK_SECRET
+          if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "${{ secrets.OPENAI_API_KEY }}" | npx wrangler secret put OPENAI_API_KEY
+          fi
 
       - name: Deploy Worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env production
+        run: npx wrangler deploy
 
   # ─── Deploy Pages (frontend) ────────────────────────────────────────────────
   deploy-pages:
@@ -90,10 +95,11 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@f0a1cd58cd66095dee69bfa18fa5efd1dde93bca # v1.5.0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: life-heatmap
-          directory: dist/public
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler pages deploy dist/public \
+            --project-name life-heatmap \
+            --branch main

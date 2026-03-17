@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useBilling } from "@/hooks/use-billing";
 import {
   LayoutDashboard,
   Tags,
@@ -43,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: tierData } = useQuery({ queryKey: ["/api/tier"], queryFn: fetchTierStatus });
   const isPremium = tierData?.tier === 'premium';
+  const { startCheckout, openPortal, isLoading: billingLoading } = useBilling();
 
   const allNav = [
     ...FREE_NAV,
@@ -92,14 +94,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </p>
           {PREMIUM_NAV.map(item => <NavLink key={item.href} item={item} />)}
 
-          {!isPremium && (
+          {!isPremium ? (
             <div className="mt-4 mx-1 p-4 rounded-2xl bg-gradient-to-br from-amber-400/10 to-amber-500/5 border border-amber-400/20">
               <div className="flex items-center gap-2 mb-2">
                 <Crown className="w-4 h-4 text-amber-400" />
                 <span className="text-sm font-semibold text-amber-200">Upgrade to Pro</span>
               </div>
               <p className="text-xs text-amber-100/60 mb-3">Unlock AI insights, analytics, goals & more.</p>
-              <a href="#" className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline">$3/month →</a>
+              <button
+                data-testid="button-upgrade-sidebar"
+                onClick={startCheckout}
+                disabled={billingLoading}
+                className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline disabled:opacity-50"
+              >
+                {billingLoading ? "Redirecting…" : "$3/month →"}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 mx-1 p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Crown className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold text-white">You're on Pro</span>
+              </div>
+              <button
+                data-testid="button-manage-subscription"
+                onClick={openPortal}
+                disabled={billingLoading}
+                className="text-xs font-semibold text-primary/80 hover:text-primary underline disabled:opacity-50"
+              >
+                Manage subscription →
+              </button>
             </div>
           )}
         </nav>

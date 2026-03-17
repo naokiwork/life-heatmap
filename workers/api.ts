@@ -11,6 +11,8 @@
  *   JWT_SECRET                 — server-only
  *   REPL_CLIENT_ID             — Replit app ID (= REPL_ID on Replit)
  *   OPENAI_API_KEY             — server-only
+ *   STRIPE_SECRET_KEY          — server-only (Stripe secret key)
+ *   STRIPE_WEBHOOK_SECRET      — server-only (Stripe webhook signing secret)
  *
  * Public vars in wrangler.toml [vars] (safe to be in source):
  *   SUPABASE_URL
@@ -18,12 +20,14 @@
  *   FRONTEND_ORIGIN
  *   WORKER_URL
  *   ENVIRONMENT
+ *   STRIPE_PRICE_ID            — monthly subscription price ID (not secret)
  */
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import Stripe from "stripe";
 import { z } from "zod";
 import { buildLoginRedirect, handleCallback, verifyAppJwt } from "./auth";
 import { checkRateLimit, RATE_LIMITS } from "./rateLimit";
@@ -39,11 +43,13 @@ export interface Env {
   WORKER_URL: string;
   ENVIRONMENT: string;
 
-  // Secrets (wrangler secret put)
+  // Secrets (wrangler secret put) — NEVER put values here or in client code
   SUPABASE_SERVICE_ROLE_KEY: string;
   JWT_SECRET: string;
   REPL_CLIENT_ID: string;
   OPENAI_API_KEY: string;
+  STRIPE_SECRET_KEY: string;        // Stripe secret key — server-only
+  STRIPE_WEBHOOK_SECRET: string;    // Stripe webhook signing secret — server-only
 
   // KV namespace binding
   RATE_LIMIT_KV: KVNamespace;
@@ -51,6 +57,9 @@ export interface Env {
   // Kill switch (set to "false" to disable AI instantly)
   FEATURE_AI_INSIGHTS_ENABLED?: string;
   AI_DAILY_QUOTA_PER_USER?: string;
+
+  // Stripe public config (safe in [vars])
+  STRIPE_PRICE_ID: string;          // Monthly plan price ID (e.g. price_XXXX)
 }
 
 // ─── App setup ────────────────────────────────────────────────────────────────
@@ -397,6 +406,162 @@ app.get("/api/insights", requireAuth, requirePremium, async (c) => {
     console.error("[ai-insights] OpenAI error:", (e as Error).message);
     return c.json([{ insight: "Keep up the good work!", type: "positive" }]);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STRIPE BILLING
+// STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are server-only secrets.
+// They are bound via `wrangler secret put` and NEVER reach the client.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeStripe(env: Env) {
+  return new Stripe(env.STRIPE_SECRET_KEY, {
+    // Use fetch instead of Node.js http — required for Workers
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+}
+
+/** POST /api/billing/checkout — Create a Stripe Checkout Session */
+app.post("/api/billing/checkout", requireAuth, async (c) => {
+  const stripe = makeStripe(c.env);
+  const supabase = makeSupabase(c.env);
+  const userId = c.get("userId");
+
+  const user = await db.getUser(supabase, userId);
+
+  // Retrieve or create Stripe customer
+  let customerId: string | undefined = user?.stripe_customer_id;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user?.email ?? undefined,
+      metadata: { userId },
+    });
+    customerId = customer.id;
+    // Store customer ID in Supabase (server-side only)
+    await supabase.from("users").update({ stripe_customer_id: customerId }).eq("id", userId);
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    payment_method_types: ["card"],
+    line_items: [{ price: c.env.STRIPE_PRICE_ID, quantity: 1 }],
+    success_url: `${c.env.FRONTEND_ORIGIN}/?upgraded=true`,
+    cancel_url: `${c.env.FRONTEND_ORIGIN}/`,
+    subscription_data: { metadata: { userId } },
+    metadata: { userId },
+  });
+
+  return c.json({ url: session.url });
+});
+
+/** POST /api/billing/portal — Open Stripe Customer Portal */
+app.post("/api/billing/portal", requireAuth, async (c) => {
+  const stripe = makeStripe(c.env);
+  const supabase = makeSupabase(c.env);
+  const userId = c.get("userId");
+
+  const user = await db.getUser(supabase, userId);
+  if (!user?.stripe_customer_id) {
+    return c.json({ message: "No billing account found. Please subscribe first." }, 404);
+  }
+
+  const portalSession = await stripe.billingPortal.sessions.create({
+    customer: user.stripe_customer_id,
+    return_url: `${c.env.FRONTEND_ORIGIN}/`,
+  });
+
+  return c.json({ url: portalSession.url });
+});
+
+/**
+ * POST /api/billing/webhook — Stripe webhook handler
+ *
+ * Security: signature is verified using STRIPE_WEBHOOK_SECRET before
+ * any database writes happen. The raw request body is used for verification.
+ */
+app.post("/api/billing/webhook", async (c) => {
+  const signature = c.req.header("stripe-signature");
+  if (!signature) return c.json({ error: "Missing stripe-signature header" }, 400);
+
+  const rawBody = await c.req.text();
+  const stripe = makeStripe(c.env);
+
+  let event: Stripe.Event;
+  try {
+    // constructEventAsync uses WebCrypto — works natively in Cloudflare Workers
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      c.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (e) {
+    console.error("[webhook] signature verification failed:", (e as Error).message);
+    return c.json({ error: "Invalid signature" }, 400);
+  }
+
+  const supabase = makeSupabase(c.env);
+
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userId = session.metadata?.userId;
+      if (userId && session.subscription) {
+        await supabase.from("users").update({
+          tier: "premium",
+          subscription_status: "active",
+          subscription_start_date: new Date().toISOString(),
+          stripe_customer_id: session.customer as string,
+          stripe_subscription_id: session.subscription as string,
+        }).eq("id", userId);
+      }
+      break;
+    }
+
+    case "customer.subscription.updated": {
+      const sub = event.data.object as Stripe.Subscription;
+      const userId = sub.metadata?.userId;
+      const isActive = sub.status === "active" || sub.status === "trialing";
+      if (userId) {
+        await supabase.from("users").update({
+          tier: isActive ? "premium" : "free",
+          subscription_status: isActive ? "active" : sub.status,
+          stripe_subscription_id: sub.id,
+        }).eq("id", userId);
+      }
+      break;
+    }
+
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+      const userId = sub.metadata?.userId;
+      if (userId) {
+        await supabase.from("users").update({
+          tier: "free",
+          subscription_status: "canceled",
+          subscription_end_date: new Date().toISOString(),
+          stripe_subscription_id: null,
+        }).eq("id", userId);
+      }
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+      if (customerId) {
+        await supabase.from("users").update({ subscription_status: "inactive" })
+          .eq("stripe_customer_id", customerId);
+      }
+      break;
+    }
+
+    default:
+      // Ignore unhandled event types
+      break;
+  }
+
+  return c.json({ received: true });
 });
 
 // ─── Global error handler ─────────────────────────────────────────────────────

@@ -27,6 +27,21 @@ export interface IStorage {
 
   // Leaderboard
   getLeaderboard(): Promise<any[]>;
+
+  // Billing / Stripe — server-side only
+  getUser(userId: string): Promise<typeof users.$inferSelect | undefined>;
+  updateStripeCustomer(userId: string, stripeCustomerId: string): Promise<void>;
+  updateSubscription(userId: string, data: {
+    tier?: string;
+    subscriptionStatus?: string;
+    subscriptionStartDate?: Date;
+    subscriptionEndDate?: Date;
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string | null;
+  }): Promise<void>;
+  updateSubscriptionByCustomer(stripeCustomerId: string, data: {
+    subscriptionStatus?: string;
+  }): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -235,6 +250,45 @@ export class DatabaseStorage implements IStorage {
       hours: Math.round(Number(r.totalMinutes) / 60 * 10) / 10,
       score: Math.round(Number(r.totalMinutes) * 1.5),
     }));
+  }
+
+  // ─── Billing / Stripe — server-side only ─────────────────────────────────────
+
+  async getUser(userId: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user;
+  }
+
+  async updateStripeCustomer(userId: string, stripeCustomerId: string) {
+    await db.update(users).set({ stripeCustomerId }).where(eq(users.id, userId));
+  }
+
+  async updateSubscription(userId: string, data: {
+    tier?: string;
+    subscriptionStatus?: string;
+    subscriptionStartDate?: Date;
+    subscriptionEndDate?: Date;
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string | null;
+  }) {
+    const updateData: Record<string, any> = {};
+    if (data.tier !== undefined) updateData.tier = data.tier;
+    if (data.subscriptionStatus !== undefined) updateData.subscriptionStatus = data.subscriptionStatus;
+    if (data.subscriptionStartDate !== undefined) updateData.subscriptionStartDate = data.subscriptionStartDate;
+    if (data.subscriptionEndDate !== undefined) updateData.subscriptionEndDate = data.subscriptionEndDate;
+    if (data.stripeCustomerId !== undefined) updateData.stripeCustomerId = data.stripeCustomerId;
+    if (data.stripeSubscriptionId !== undefined) updateData.stripeSubscriptionId = data.stripeSubscriptionId;
+    if (Object.keys(updateData).length > 0) {
+      await db.update(users).set(updateData).where(eq(users.id, userId));
+    }
+  }
+
+  async updateSubscriptionByCustomer(stripeCustomerId: string, data: { subscriptionStatus?: string }) {
+    if (data.subscriptionStatus !== undefined) {
+      await db.update(users)
+        .set({ subscriptionStatus: data.subscriptionStatus })
+        .where(eq(users.stripeCustomerId, stripeCustomerId));
+    }
   }
 }
 
