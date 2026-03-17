@@ -1,0 +1,213 @@
+Build this app with the following strict architecture and rules.
+
+GOAL
+I want you to build a production-ready web app where:
+- Development and implementation are handled inside Replit
+- Deployment target is Cloudflare, not Replit
+- Subscription/payment system is fully implemented by you
+- Secrets must never be hardcoded
+- I want the final result to be easy for me to deploy by only setting secrets and connecting services
+
+CORE ARCHITECTURE
+Use this architecture unless there is a strong technical reason to improve it:
+- Frontend: Cloudflare Pages compatible
+- Backend/API: Cloudflare Workers or Pages Functions compatible
+- Database: Supabase
+- Payments: Stripe subscriptions
+- Auth: Supabase Auth or a minimal secure auth system compatible with Supabase
+- Source control: GitHub-ready
+- Deployment target: Cloudflare
+- No Replit deployment dependency in production
+
+MAIN PRODUCT REQUIREMENTS
+Implement a subscription-based SaaS foundation with:
+- Landing page
+- Sign up / login
+- User dashboard
+- Free plan
+- Pro subscription plan
+- Billing / subscription management page
+- Feature gating based on subscription tier
+- Secure webhook handling
+- Basic account settings page
+
+SUBSCRIPTION REQUIREMENTS
+Implement Stripe subscription support end-to-end:
+- Free tier
+- Pro monthly subscription
+- Optional Pro yearly subscription if easy to support cleanly
+- Stripe Checkout for subscribing
+- Stripe Customer Portal for managing billing, plan changes, and cancellation
+- Webhook handling for:
+  - checkout.session.completed
+  - customer.subscription.created
+  - customer.subscription.updated
+  - customer.subscription.deleted
+  - invoice.paid
+  - invoice.payment_failed
+- Persist subscription state in database
+- Reflect subscription status in UI and backend authorization
+- Prevent premium feature access when user is on free tier
+- Handle cancellation and expired subscription states cleanly
+
+DATABASE REQUIREMENTS
+Design a clean, scalable schema.
+At minimum include:
+- users
+- profiles
+- subscriptions
+- usage_tracking or feature_access if needed
+- webhook_events or idempotency tracking if useful
+
+For subscriptions table, include fields like:
+- id
+- user_id
+- stripe_customer_id
+- stripe_subscription_id
+- stripe_price_id
+- plan_name
+- billing_interval
+- status
+- current_period_start
+- current_period_end
+- cancel_at_period_end
+- created_at
+- updated_at
+
+AUTHORIZATION RULES
+Implement robust feature gating:
+- Free users can access only free features
+- Pro users can access premium features
+- Backend must enforce plan restrictions, not only frontend
+- Never trust client-side tier checks alone
+
+CLOUDFLARE COMPATIBILITY RULES
+This project must be designed specifically for Cloudflare deployment.
+That means:
+- Do not build around Replit deployment assumptions
+- Do not rely on Node APIs that break on Cloudflare Workers unless properly handled
+- Keep the app compatible with Cloudflare Pages + Functions or Workers
+- Prepare deployment configuration files needed for Cloudflare
+- If framework choice matters, choose one with smooth Cloudflare compatibility
+- Avoid unnecessary server dependencies that make Cloudflare deployment difficult
+
+SECRETS AND SECURITY RULES
+Very important:
+- Never hardcode API keys, secrets, tokens, or private credentials
+- Use environment variables everywhere
+- Prepare the project so I can later set secrets in Cloudflare
+- Add input validation for all API endpoints
+- Add secure webhook signature verification for Stripe
+- Add rate limiting or at least leave a clean extension point for rate limiting
+- Prevent duplicate webhook processing
+- Use least-privilege architecture where possible
+- Never expose service role keys to the client
+- Clearly separate public env vars and server-only secrets
+
+ENVIRONMENT VARIABLES
+Create a final list of all required environment variables.
+Use clear names such as:
+- NEXT_PUBLIC_SUPABASE_URL or equivalent
+- NEXT_PUBLIC_SUPABASE_ANON_KEY or equivalent
+- SUPABASE_SERVICE_ROLE_KEY if truly required
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- STRIPE_PRICE_ID_PRO_MONTHLY
+- STRIPE_PRICE_ID_PRO_YEARLY if used
+- STRIPE_CUSTOMER_PORTAL_RETURN_URL
+- APP_BASE_URL
+- any other required variables
+
+If some variables are optional, label them clearly.
+
+DX AND MAINTAINABILITY
+I want clean, maintainable code:
+- Clear folder structure
+- Strong naming consistency
+- Reusable utility functions
+- Minimal but solid abstractions
+- Comments only where useful
+- No bloated code
+- Production-minded error handling
+- Clean types/interfaces if using TypeScript
+
+UI/UX
+Use a clean modern UI:
+- Simple
+- Premium feel
+- Fast
+- Minimal clutter
+- Clear upgrade prompts
+- Billing page must be easy to understand
+- Free vs Pro difference should be obvious but elegant
+
+DELIVERABLES I EXPECT FROM YOU
+1. Build the app
+2. Implement subscription flow end-to-end
+3. Make it Cloudflare deployment-ready
+4. Add all required config files
+5. Add database schema / migrations
+6. Add Stripe integration and webhook logic
+7. Add feature gating
+8. Add a final deployment checklist
+9. Add a final secrets checklist
+10. Add a final test checklist
+
+FINAL OUTPUT FORMAT
+When implementation is complete, give me these sections:
+
+A. Architecture summary
+- Explain final stack and why it fits Cloudflare
+
+B. File structure
+- Show key files and what each does
+
+C. Environment variables
+- List every variable
+- Mark public vs server-only
+- Mark required vs optional
+
+D. Database schema
+- Show all important tables and fields
+
+E. Stripe setup checklist
+- Exact steps I must do in Stripe dashboard
+
+F. Supabase setup checklist
+- Exact steps I must do in Supabase
+
+G. Cloudflare deployment checklist
+- Exact steps I must do in Cloudflare Pages/Workers
+- Include where to set secrets
+
+H. GitHub deployment flow
+- Explain how this should be pushed and connected
+
+I. Security checklist
+- Show how secrets are protected
+- Show what I must never expose
+
+J. Test plan
+- Explain how to test:
+  - signup/login
+  - free tier
+  - upgrade to pro
+  - webhook updates
+  - cancellation
+  - failed payment
+  - billing portal
+  - access control
+
+IMPORTANT BEHAVIOR RULES
+- If there is any ambiguity, choose the option that is safest, simplest, and most Cloudflare-compatible
+- Do not leave payment flow half-finished
+- Do not use mock subscription logic unless clearly separated as temporary
+- Do not deploy to Replit
+- Do not ask me to manually write large amounts of code that you can generate yourself
+- If a technical tradeoff exists, explain it briefly and choose the best production-minded option
+
+Start by:
+1. choosing the best Cloudflare-compatible stack,
+2. outlining the architecture,
+3. generating the project structure,
+4. then implementing the subscription system in a production-minded way.
