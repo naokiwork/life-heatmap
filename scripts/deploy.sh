@@ -156,18 +156,37 @@ export CLOUDFLARE_API_KEY
 export CLOUDFLARE_EMAIL
 export CLOUDFLARE_ACCOUNT_ID
 
-KV_OUTPUT=$(npx wrangler kv:namespace create RATE_LIMIT_KV 2>&1)
-echo "$KV_OUTPUT"
-
-KV_ID=$(echo "$KV_OUTPUT" | grep -o '"id": *"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+# First try to find an existing KV namespace with this name
+echo "Checking for existing KV namespace..."
+KV_LIST=$(npx wrangler kv:namespace list 2>&1) || true
+KV_ID=$(echo "$KV_LIST" | node -e "
+  const input = require('fs').readFileSync('/dev/stdin','utf8');
+  try {
+    const arr = JSON.parse(input.match(/\[.*\]/s)?.[0] || '[]');
+    const ns = arr.find(n => n.title === 'life-heatmap-RATE_LIMIT_KV');
+    if (ns) process.stdout.write(ns.id);
+  } catch(e) {}
+" 2>/dev/null) || true
 
 if [[ -n "$KV_ID" ]]; then
-  ok "KV namespace created: $KV_ID"
-  # Update wrangler.toml with the real KV ID
+  ok "Found existing KV namespace: $KV_ID"
+else
+  # Create new KV namespace
+  echo "Creating new KV namespace..."
+  KV_OUTPUT=$(npx wrangler kv:namespace create RATE_LIMIT_KV 2>&1) || true
+  echo "$KV_OUTPUT"
+  KV_ID=$(echo "$KV_OUTPUT" | grep -o '"id":"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"') || true
+  [[ -z "$KV_ID" ]] && KV_ID=$(echo "$KV_OUTPUT" | grep -oE '[0-9a-f]{32}' | head -1) || true
+fi
+
+if [[ -n "$KV_ID" ]]; then
+  ok "KV namespace ID: $KV_ID"
   sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/${KV_ID}/g" wrangler.toml
   ok "wrangler.toml updated with KV ID"
 else
-  warn "Could not auto-extract KV ID — check output above and update wrangler.toml manually"
+  warn "Could not get KV namespace ID — updating wrangler.toml with placeholder"
+  warn "You may need to run: npx wrangler kv:namespace list"
+  warn "Then update wrangler.toml manually with the correct ID"
 fi
 
 # ─── Set Worker secrets ───────────────────────────────────────────────────────
