@@ -131,12 +131,14 @@ SUPABASE_PROJECT_ID="dqzmljdcgeizwtzcsoic"
 echo "Applying schema via Supabase Management API..."
 SCHEMA_SQL=$(cat supabase/schema.sql)
 
+SCHEMA_JSON=$(node -e "process.stdout.write(JSON.stringify(require('fs').readFileSync('supabase/schema.sql','utf8')))")
+
 HTTP_STATUS=$(curl -s -o /tmp/supabase_response.json -w "%{http_code}" \
   --request POST \
   "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_ID}/database/query" \
   --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   --header "Content-Type: application/json" \
-  --data "{\"query\": $(echo "$SCHEMA_SQL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}")
+  --data "{\"query\": ${SCHEMA_JSON}}")
 
 if [[ "$HTTP_STATUS" == "200" || "$HTTP_STATUS" == "201" ]]; then
   ok "Supabase schema applied"
